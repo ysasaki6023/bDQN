@@ -6,16 +6,14 @@ import numpy as np
 inFileGlob    = "streamData/2017-*.json"
 outFileFold   = "convertedData"
 
-array_min_asks_price, array_max_bids_price, array_min_asks_volume,array_max_bids_volume = [],[],[],[]
-depth_asks,depth_bids = [],[]
-tseries_1s, tseries_10s, tseries_100s = [],[],[]
-
 deque_length = 1000 * 100
 deque_price  = deque(maxlen=deque_length) # 1秒間に100回更新されて、それが1000秒続いても大丈夫なように設計
 deque_time   = deque(maxlen=1000) # 直近100回の平均でfpsを計算
 deque_fps    = deque(maxlen=1000) # 直近100回の平均でfpsを計算
 
 nTimeSeries = 10
+
+minimumLength = 6*1000 # 最低でも1000秒くらいはデータあるものを対象とする
 
 avgFPS = 6.0
 alpha  = 1e-2
@@ -26,9 +24,9 @@ if not os.path.exists(outFileFold):
 for inFilePath in sorted(glob.glob(inFileGlob)):
     outputFileName = os.path.join(outFileFold,os.path.basename(inFilePath).split(".")[0]+".h5f")
     print "converting :",inFilePath," -> ",outputFileName
-    array_min_asks_price = array_max_bids_price = array_min_asks_volume = array_max_bids_volume = []
-    depth_asks = depth_bids = []
-    tseries_1s   = tseries_10s  = tseries_100s = []
+    array_min_asks_price, array_max_bids_price, array_min_asks_volume, array_max_bids_volume = [],[],[],[]
+    depth_asks,depth_bids = [],[]
+    tseries_1s,tseries_10s,tseries_100s = [],[],[]
 
     with open(inFilePath) as inFile:
         for line in inFile:
@@ -76,6 +74,10 @@ for inFilePath in sorted(glob.glob(inFileGlob)):
             tseries_10s.append ( np.array(past_prices_10s) )
             tseries_100s.append( np.array(past_prices_100s))
             tseries_1s[-1][min(tseries_1s[-1].shape[0],nTimeSeries):] = past_prices_1s[-1]
+
+    if len(array_min_asks_price)<minimumLength:
+        print ".... not enough length."
+        continue
 
     array_min_asks_price = np.array(array_min_asks_price)
     array_max_bids_price = np.array(array_max_bids_price)
