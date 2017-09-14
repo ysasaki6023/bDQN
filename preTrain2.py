@@ -4,7 +4,7 @@ import numpy as np
 
 from keras.models import Sequential,Input
 from keras.layers import Dense, Activation, Flatten, BatchNormalization, Dropout, Reshape, Conv2D, MaxPooling2D, GlobalAveragePooling2D
-from keras.optimizers import Adam,RMSprop
+from keras.optimizers import Adam
 from keras.layers.advanced_activations import LeakyReLU
 from keras import regularizers
 import tensorflow as tf
@@ -13,7 +13,7 @@ import keras.backend as K
 from keras.callbacks import EarlyStopping, TensorBoard, ModelCheckpoint, ReduceLROnPlateau
 from keras import initializers
 
-from env2cls import Environment
+from env2 import Environment
 
 config = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.20))
 session = tf.Session(config=config)
@@ -27,10 +27,11 @@ parser.add_argument("--validateData","-v",dest="validateData"  , type=str,defaul
 parser.add_argument("--reload","-r",dest="reload"  , type=str,default=None)
 parser.add_argument("--batchSize","-b",dest="batchSize"  , type=int,default=32)
 parser.add_argument("--zdim","-z",dest="zdim"  , type=int,default=16)
-parser.add_argument("--estLength",dest="estLength"  , type=int,default=1*60*5) # 5fps前提で、だいたい1分くらい先まで予測
-parser.add_argument("--estStep",dest="estStep"  , type=int,default=10*5) # 10秒間の平均を計算
-nLookbackLength = 3000
-nLookbackSteps = 300
+parser.add_argument("--estLength",dest="estLength"  , type=int,default=5*60*5) # 5fps前提で、だいたい4分くらい先まで予測
+parser.add_argument("--estStep",dest="estStep"  , type=int,default=20*5) # 20秒間の平均を計算
+parser.add_argument("--showStep",dest="showStep"  , type=int,default=3) # 3つおきくらいに表示
+nLookbackLength = 1000
+nLookbackSteps = 100
 nLookbackRange = (-5000,5000)
 nLookbackRangeStep = 50
 
@@ -83,24 +84,26 @@ model.add(MaxPooling2D(pool_size=(2,5)))
 #model.add(GlobalAveragePooling2D())
 
 model.add(Flatten())
-model.add(Dense(64,kernel_regularizer=regularizers.l2(regul)))
+model.add(Dense(512,kernel_regularizer=regularizers.l2(regul)))
 model.add(LeakyReLU(alpha=0.1))
 model.add(Dropout(0.5))
+model.add(Dense(args.zdim,kernel_regularizer=regularizers.l2(regul)))
+model.add(LeakyReLU(alpha=0.1))
 
-model.add(Dense(2,kernel_regularizer=regularizers.l2(regul)))
-model.add(Activation('softmax'))
+model.add(Dense(sampleT.shape[1],kernel_regularizer=regularizers.l2(regul),bias_initializer=initializers.Constant(value=1.0)))
+model.add(Activation('linear'))
 
-#model.add(Dense(args.zdim,kernel_regularizer=regularizers.l2(regul)))
-#model.add(LeakyReLU(alpha=0.1))
-
-#model.add(Dense(sampleT.shape[1],kernel_regularizer=regularizers.l2(regul),bias_initializer=initializers.Constant(value=1.0)))
-
+def eachError(n):
+    def rel_error_at(t,y):
+        v1 = K.sqrt(K.mean(K.square(t[:,n]-y[:,n])))
+        v0 = K.sqrt(K.mean(K.square(t[:,n]-1.0   )))
+        return v1/v0
+    return rel_error_at
 eachSteps = range(int(args.estLength/args.estStep))
 
-#model.compile(optimizer = RMSprop(lr=args.learnRate),
 model.compile(optimizer = Adam(lr=args.learnRate),
-              loss      =  "binary_crossentropy",
-              metrics   = ["accuracy"])
+              loss      =  "mean_squared_error",
+              metrics   = ["mean_absolute_error"]+[eachError(n) for n in eachSteps[::args.showStep]])
 print(model.summary())
 
 if args.reload:

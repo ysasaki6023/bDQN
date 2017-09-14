@@ -13,7 +13,7 @@ import keras.backend as K
 from keras.callbacks import EarlyStopping, TensorBoard, ModelCheckpoint, ReduceLROnPlateau
 from keras import initializers
 
-from env2cls import Environment
+from env2cls3 import Environment
 
 config = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.20))
 session = tf.Session(config=config)
@@ -87,7 +87,7 @@ model.add(Dense(64,kernel_regularizer=regularizers.l2(regul)))
 model.add(LeakyReLU(alpha=0.1))
 model.add(Dropout(0.5))
 
-model.add(Dense(2,kernel_regularizer=regularizers.l2(regul)))
+model.add(Dense(3,kernel_regularizer=regularizers.l2(regul)))
 model.add(Activation('softmax'))
 
 #model.add(Dense(args.zdim,kernel_regularizer=regularizers.l2(regul)))
@@ -99,7 +99,7 @@ eachSteps = range(int(args.estLength/args.estStep))
 
 #model.compile(optimizer = RMSprop(lr=args.learnRate),
 model.compile(optimizer = Adam(lr=args.learnRate),
-              loss      =  "binary_crossentropy",
+              loss      =  "categorical_crossentropy",
               metrics   = ["accuracy"])
 print(model.summary())
 
