@@ -120,14 +120,17 @@ class Environment(gym.Env):
         # 1ファイル分データを読み込んでselfへセットする
 
         # データの読み込み
-        self.data = h5py.File(inFilePath)
-        self.min_asks_price  = self.data["min_asks_price"].value
-        self.max_bids_price  = self.data["max_bids_price"].value
-        self.min_asks_volume = self.data["min_asks_volume"].value
-        self.max_bids_volume = self.data["max_bids_volume"].value
-        self.depth_asks      = self.data["depth_asks"].value # time x lines x (price,volume)
-        self.depth_bids      = self.data["depth_bids"].value # time x lines x (price,volume)
-        self.tseries         = self.data["tseries"].value # time x (10+10+10)
+        try:
+            self.data = h5py.File(inFilePath)
+            self.min_asks_price  = self.data["min_asks_price"].value
+            self.max_bids_price  = self.data["max_bids_price"].value
+            self.min_asks_volume = self.data["min_asks_volume"].value
+            self.max_bids_volume = self.data["max_bids_volume"].value
+            self.depth_asks      = self.data["depth_asks"].value # time x lines x (price,volume)
+            self.depth_bids      = self.data["depth_bids"].value # time x lines x (price,volume)
+            self.tseries         = self.data["tseries"].value # time x (10+10+10)
+        except:
+            assert False,"file broken : %s"%inFilePath
         #print self.depth_asks[-50:,:,0]
         #print self.depth_asks[:,:,0].max(),self.depth_asks[:,:,0].min()
         #raw_input()
@@ -154,23 +157,23 @@ class Environment(gym.Env):
         return
 
 #############
-    def yieldBatch(self,nBatch,nLength,nSteps,nLookbackLength,nLookbackSteps,nLookbackRange,nLookbackRangeStep):
+    def yieldBatch(self,nBatch,nLength,nSteps,nLookbackLength,nLookbackSteps,nLookbackRange,nLookbackRangeStep,mode="regression:multi"):
         while True:
-            yield self.getBatch(nBatch,nLength,nSteps,nLookbackLength,nLookbackSteps,nLookbackRange,nLookbackRangeStep)
+            yield self.getBatch(nBatch,nLength,nSteps,nLookbackLength,nLookbackSteps,nLookbackRange,nLookbackRangeStep,mode=mode)
 
 #############
-    def getBatch(self,nBatch,nLength,nSteps,nLookbackLength,nLookbackSteps,nLookbackRange,nLookbackRangeStep):
+    def getBatch(self,nBatch,nLength,nSteps,nLookbackLength,nLookbackSteps,nLookbackRange,nLookbackRangeStep,mode="regression:multi"):
         self.__loadFile( random.choice(self.inputPathList) ) # ランダムに1ファイルを読み込み。self系の変数にセット
         batchX = []
         batchT = []
         for i in range(nBatch):
-            x,t = self.getOne(nLength,nSteps,nLookbackLength,nLookbackSteps,nLookbackRange,nLookbackRangeStep)
+            x,t = self.getOne(nLength,nSteps,nLookbackLength,nLookbackSteps,nLookbackRange,nLookbackRangeStep,mode=mode)
             batchX.append(np.expand_dims(x,axis=0))
             batchT.append(np.expand_dims(t,axis=0))
         return np.concatenate(batchX,axis=0),np.concatenate(batchT,axis=0)
 
 #############
-    def getOne(self,nLength,nSteps,nLookbackLength,nLookbackSteps,nLookbackRange=(-5000,5000),nLookbackRangeStep=5):
+    def getOne(self,nLength,nSteps,nLookbackLength,nLookbackSteps,nLookbackRange=(-5000,5000),nLookbackRangeStep=5,mode="regression:multi"):
 
         nWidth = int(nLength/nSteps)
 
@@ -189,55 +192,27 @@ class Environment(gym.Env):
         x1 = np.tile(np.linspace(0,nLookbackLength-1,nLookbackLength),(y1.shape[1],1)).transpose(1,0)
         x2 = np.tile(np.linspace(0,nLookbackLength-1,nLookbackLength),(y2.shape[1],1)).transpose(1,0)
         ybins = int((nLookbackRange[1]-nLookbackRange[0])/nLookbackRangeStep)
-        xx = np.concatenate([x1.flatten()   ,x2.flatten()   ])
-        #print "original"
-        #print "getOne()"
-        #print y1[-50:]
-        #print y2[-50:]
-        y1 -= yc
-        y2 -= yc
-        #print y1[-1,0], y2[-1,0]
-        #print y1[-2,0], y2[-2,0]
-        #print "y1,y2="
-        #print y1[-50:]
-        #print y2[-50:]
-        #print y1[-50:].mean(),y2[-50:].mean()
 
-        #print y1.mean(), y2.mean()
-        #print (y1[-1,0]-yc).mean(), (y2[-1,0]-yc).mean()
-        yy = np.concatenate([y1.flatten(),y2.flatten()])
-        #yy = np.concatenate([y1.flatten()-yc,y2.flatten()-yc])
+        xx = np.concatenate([x1.flatten()   ,x2.flatten()   ])
+        yy = np.concatenate([y1.flatten()-yc,y2.flatten()-yc])
         zz = np.concatenate([z1.flatten()   ,-z2.flatten()  ])
 
-        #print yy[zz>0].mean(),yy[zz<0].mean()
-
-        #h, xedges, yedges = np.histogram2d(xx,yy,weights=zz,range=((0,nLookbackSteps-1),nLookbackRange),bins=(nLookbackSteps,ybins))
-        #print ((0,nLookbackSteps-1),nLookbackRange)
         h, xedges, yedges = np.histogram2d(xx,yy,weights=zz,bins=(nLookbackSteps,ybins),range=((0,nLookbackLength-1),nLookbackRange))
-
-        #fig = plt.figure(figsize=(16,10))
-        #ax = fig.add_subplot(111)
-        #X, Y = np.meshgrid(xedges, yedges)
-        #print X
-        #print Y
-        #ax.pcolormesh(X, Y, h.T, vmin=-1, vmax=1,cmap="seismic")
-        #fig.show()
-        #raw_input()
         h = np.expand_dims(h,axis=2) # color dim
 
         split_price  = np.split(self.max_bids_price [self.posIdx:self.posIdx+nSteps*nWidth],nWidth)
-        #split_volume = np.split(self.max_bids_volume[self.posIdx:self.posIdx+nSteps*nWidth],nSteps)
-
         split_price  = np.mean(np.concatenate([np.expand_dims(p,axis=0) for p in split_price] ,axis=0),axis=1)
-        #split_volume = np.mean(np.concatenate(split_volume,axis=0),axis=1)
-
         split_price /= self.max_bids_price[self.posIdx]
-        #split_volume = np.mean(np.concatenate(split_volume,axis=0),axis=1)
 
-        t = split_price[-1] # 最後の一つだけを注目
-        tt  = (t <1.).astype(np.int32) * 0
-        tt += (t==1.).astype(np.int32) * 1
-        tt += (t >1.).astype(np.int32) * 2
-        tt = np_utils.to_categorical(tt,3)[0]
+        if   mode=="regression:multi":
+            tt = split_price
+        elif mode=="regression:last":
+            tt = split_price[-1] # 最後の一つだけを注目
+        elif mode=="classification:last":
+            t = split_price[-1] # 最後の一つだけを注目
+            tt  = (t <1.).astype(np.int32) * 0
+            tt += (t==1.).astype(np.int32) * 1
+            tt += (t >1.).astype(np.int32) * 2
+            tt = np_utils.to_categorical(tt,3)[0]
 
         return h,tt
