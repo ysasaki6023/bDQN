@@ -3,7 +3,8 @@ import json,os,sys,h5py,glob,datetime
 from collections import deque
 import numpy as np
 
-inFileGlob    = "streamData/2017-*.json"
+#inFileGlob    = "streamData/2017-*.json"
+inFileGlob    = "streamData/2017-09-1[5-9]*"
 outFileFold   = "convertedData"
 
 deque_length = 1000 * 100

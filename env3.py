@@ -202,7 +202,11 @@ class Environment(gym.Env):
 
         split_price  = np.split(self.max_bids_price [self.posIdx:self.posIdx+nSteps*nWidth],nWidth)
         split_price  = np.mean(np.concatenate([np.expand_dims(p,axis=0) for p in split_price] ,axis=0),axis=1)
-        split_price /= self.max_bids_price[self.posIdx]
+        #split_price /= self.max_bids_price[self.posIdx]
+        split_price -= self.max_bids_price[self.posIdx]
+        split_width  = self.min_asks_price[self.posIdx] - self.max_bids_price[self.posIdx]
+        #print split_width
+        #split_price /= split_width
 
         if   mode=="regression:multi":
             tt = split_price
@@ -210,9 +214,11 @@ class Environment(gym.Env):
             tt = split_price[-1] # 最後の一つだけを注目
         elif mode=="classification:last":
             t = split_price[-1] # 最後の一つだけを注目
-            tt  = (t <1.).astype(np.int32) * 0
-            tt += (t==1.).astype(np.int32) * 1
-            tt += (t >1.).astype(np.int32) * 2
+            #print t
+            splitThres = 100
+            tt  = (t < -splitThres).astype(np.int32) * 0
+            tt += (-splitThres<=t<=splitThres).astype(np.int32) * 1
+            tt += (t >splitThres).astype(np.int32) * 2
             tt = np_utils.to_categorical(tt,3)[0]
 
         return h,tt
